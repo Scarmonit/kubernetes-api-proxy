@@ -1,0 +1,4 @@
+## 2025-02-18 - Permissive CORS Constraint vs Security
+**Vulnerability:** Wildcard CORS (`Access-Control-Allow-Origin: *`) on Kubernetes API proxy endpoints allows any website to read API responses.
+**Learning:** The project's `AGENTS.md` explicitly mandates "Permissive (`*`) on all proxied responses" as a convention. This constraint overrides the standard security best practice of restricting CORS to trusted origins (e.g., `scarmonit.com`), creating a potential data exposure risk if the API relies on browser-based authentication or is used in sensitive contexts.
+**Prevention:** When working on this proxy, respect the `*` requirement unless the architecture changes, but mitigate risks by ensuring no other security headers are missing (e.g., CSP, HSTS) and ensuring the backend API handles authentication robustly (not relying on cookies/CORS for protection).
