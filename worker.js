@@ -21,7 +21,7 @@ export default {
     }
 
     // 3. Pass through to Pages/Static origin for the dashboard UI
-    if (url.pathname === '/kubernetes' || url.pathname === '/kubernetes/') {
+    if (url.pathname === '/kubernetes' || url.pathname === '/kubernetes/' || url.pathname.startsWith('/kubernetes/dashboard')) {
       return fetch(request);
     }
 

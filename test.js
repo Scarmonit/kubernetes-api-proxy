@@ -4,6 +4,12 @@ const { fetch: workerFetch } = require('./worker').default;
 // Store original globals
 const originalFetch = global.fetch;
 
+// Mock Environment
+const mockEnv = {
+  ALLOWED_ORIGIN: '*',
+  K8S_BEARER_TOKEN: 'test-token'
+};
+
 // Set up default mock
 global.fetch = async (request) => {
   if (request.url.startsWith('https://api.scarmonit.com')) {
@@ -31,20 +37,20 @@ async function run() {
             'Access-Control-Request-Headers': 'Content-Type',
           },
         });
-        const response = await workerFetch(request);
+        const response = await workerFetch(request, mockEnv);
         assert.strictEqual(response.status, 204);
         assert.strictEqual(response.headers.get('Access-Control-Allow-Origin'), '*');
       });
 
       await runTest('returns 404 for non-kubernetes paths', async () => {
         const request = new Request('https://scarmonit.com/other/path');
-        const response = await workerFetch(request);
+        const response = await workerFetch(request, mockEnv);
         assert.strictEqual(response.status, 404);
       });
 
       await runTest('proxies API paths to the correct origin', async () => {
           const request = new Request('https://scarmonit.com/kubernetes/api/v1/pods');
-          const response = await workerFetch(request);
+          const response = await workerFetch(request, mockEnv);
           const text = await response.text();
           assert.strictEqual(response.status, 200);
           assert.strictEqual(text, 'proxied');
@@ -52,7 +58,7 @@ async function run() {
 
       await runTest('passes through non-API paths to the origin', async () => {
         const request = new Request('https://scarmonit.com/kubernetes/dashboard');
-        const response = await workerFetch(request);
+        const response = await workerFetch(request, mockEnv);
         const text = await response.text();
         assert.strictEqual(response.status, 200);
         assert.strictEqual(text, 'passthrough');
@@ -73,10 +79,10 @@ async function run() {
 
         try {
             const request = new Request('https://scarmonit.com/kubernetes/api/v1/pods');
-            const response = await workerFetch(request);
+            const response = await workerFetch(request, mockEnv);
             const json = await response.json();
             assert.strictEqual(response.status, 502);
-            assert.deepStrictEqual(json.error, "Upstream API Unavailable");
+            assert.deepStrictEqual(json.error, "Gateway Error");
         } finally {
             // restore mocks
             global.fetch = originalFetchForThisTest;
