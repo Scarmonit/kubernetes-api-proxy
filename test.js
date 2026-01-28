@@ -1,5 +1,7 @@
-const assert = require('assert');
-const { fetch: workerFetch } = require('./worker').default;
+import assert from 'assert';
+import worker from './worker.js';
+
+const workerFetch = worker.fetch;
 
 // Store original globals
 const originalFetch = global.fetch;
