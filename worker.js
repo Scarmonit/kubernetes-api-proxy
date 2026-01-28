@@ -38,17 +38,31 @@ export default {
       body: request.body,
     });
 
-    // Forward to the API and return the response
-    const response = await fetch(apiRequest);
+    try {
+      // Forward to the API and return the response
+      const response = await fetch(apiRequest);
 
-    // Return response with CORS headers
-    const newHeaders = new Headers(response.headers);
-    newHeaders.set('Access-Control-Allow-Origin', '*');
+      // Return response with CORS headers
+      const newHeaders = new Headers(response.headers);
+      newHeaders.set('Access-Control-Allow-Origin', '*');
 
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: newHeaders,
-    });
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: newHeaders,
+      });
+    } catch (e) {
+      // Return a friendly 502 error if the upstream is unreachable
+      return new Response(JSON.stringify({
+        error: "Upstream API Unavailable",
+        message: "The Kubernetes API server could not be reached. It may be down or experiencing high traffic."
+      }), {
+        status: 502,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
   },
 };
