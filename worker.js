@@ -1,3 +1,6 @@
+// Define API paths that should be proxied
+const apiPaths = ['/health', '/api/', '/swagger', '/api'];
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -14,8 +17,6 @@ export default {
       return fetch(request);
     }
 
-    // Define API paths that should be proxied
-    const apiPaths = ['/health', '/api/', '/swagger', '/api'];
     const strippedPath = path.replace('/kubernetes', '');
 
     // Check if this is an API path that should be proxied
@@ -26,6 +27,19 @@ export default {
     if (!isApiPath) {
       // Not an API path, pass through to origin
       return fetch(request);
+    }
+
+    // Optimization: Handle CORS preflight requests directly
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+          'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || '*',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
     }
 
     // Proxy to the API
