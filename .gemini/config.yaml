@@ -1,0 +1,22 @@
+# Gemini Code Assist Configuration for kubernetes-api-proxy
+# JavaScript + Cloudflare Workers
+
+have_fun: false
+
+ignore_patterns:
+  - "**/node_modules/**"
+  - "**/*.lock"
+  - "**/.wrangler/**"
+
+memory_config:
+  disabled: false
+
+code_review:
+  disable: false
+  comment_severity_threshold: MEDIUM
+  max_review_comments: -1
+  pull_request_opened:
+    help: false
+    summary: true
+    code_review: true
+    include_drafts: true
