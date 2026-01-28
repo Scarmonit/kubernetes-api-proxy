@@ -1,3 +1,6 @@
+// Define API paths that should be proxied
+const apiPaths = ['/health', '/api/', '/swagger', '/api'];
+
 export default {
   async fetch(request, env, ctx) {
     try {
@@ -29,6 +32,7 @@ export default {
         return fetch(request);
       }
 
+    const strippedPath = path.replace('/kubernetes', '');
       // Proxy to the API
       const apiUrl = `https://api.scarmonit.com${strippedPath}${url.search}`;
 
@@ -58,6 +62,19 @@ export default {
     } catch (e) {
       console.error('Worker error:', e);
       return new Response('Internal Server Error', { status: 500 });
+    }
+
+    // Optimization: Handle CORS preflight requests directly
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+          'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || '*',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
     }
 
     // Proxy to the API
