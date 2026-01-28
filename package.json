@@ -5,7 +5,7 @@
   "main": "worker.js",
   "type": "module",
   "scripts": {
-    "test": "node test.js",
+    "test": "node --test test/worker.test.js",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
