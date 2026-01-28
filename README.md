@@ -7,9 +7,10 @@ A secure, observable Cloudflare Worker that acts as a proxy for the Kubernetes A
 *   **Secure Proxying:** Hides upstream API details and handles CORS.
 *   **Auth Injection:** Injects `Authorization: Bearer <token>` from secrets, keeping tokens out of the client.
 *   **Observability:** Structured JSON logging and Request IDs.
-*   **Health Checks:** `/kubernetes/proxy-health` endpoint to verify worker status.
+*   **Health Checks:** `/kubernetes/proxy-health` endpoint to verify worker status (v1.0.1).
 *   **WebSocket Support:** Fully supports `kubectl exec` and `logs` via WebSocket upgrades.
-*   **Hardened Security:** Adds strict security headers (HSTS, X-Frame-Options, etc.).
+*   **Hardened Security:** Adds strict security headers (HSTS, X-Frame-Options, etc.) and blocks indexing via `robots.txt`.
+*   **Traceability:** Adds `User-Agent: Kubernetes-API-Proxy/1.0.1` to upstream requests.
 
 ## Configuration
 

@@ -1,4 +1,4 @@
-import { describe, it, before, after, mock } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import worker from '../worker.js';
 
@@ -53,6 +53,33 @@ describe('Worker Logic', () => {
     const json = await response.json();
     assert.strictEqual(response.status, 200);
     assert.strictEqual(json.status, 'ok');
+    assert.strictEqual(json.version, '1.0.1');
+  });
+
+  it('serves robots.txt', async () => {
+    const request = new Request('https://scarmonit.com/robots.txt');
+    const response = await workerFetch(request, mockEnv);
+    const text = await response.text();
+    assert.strictEqual(response.status, 200);
+    assert.ok(text.includes('Disallow: /'));
+  });
+
+  it('adds User-Agent header to upstream requests', async () => {
+      // Intercept fetch to check headers
+      let capturedRequest;
+      global.fetch = async (request) => {
+        if (request.url.startsWith('https://api.scarmonit.com')) {
+          capturedRequest = request;
+          return new Response('proxied', { status: 200 });
+        }
+        return new Response('passthrough', { status: 200 });
+      };
+
+      const request = new Request('https://scarmonit.com/kubernetes/api/v1/pods');
+      await workerFetch(request, mockEnv);
+      
+      assert.ok(capturedRequest);
+      assert.strictEqual(capturedRequest.headers.get('User-Agent'), 'Kubernetes-API-Proxy/1.0.1');
   });
 
   it('returns 404 for non-kubernetes paths', async () => {

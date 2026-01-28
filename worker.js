@@ -1,5 +1,20 @@
+/**
+ * @typedef {Object} Env
+ * @property {string} [K8S_API_URL] - Upstream Kubernetes API URL
+ * @property {string} [ALLOWED_ORIGIN] - Allowed CORS Origin
+ * @property {string} [K8S_BEARER_TOKEN] - Bearer token for authentication
+ * @property {string} [ENVIRONMENT] - Deployment environment name
+ */
+
 export default {
-  async fetch(request, env, ctx) {
+  /**
+   * Main fetch handler
+   * @param {Request} request
+   * @param {Env} env
+   * @param {ExecutionContext} ctx
+   * @returns {Promise<Response>}
+   */
+  async fetch(request, env, _ctx) {
     const startTime = Date.now();
     const requestId = crypto.randomUUID();
     const url = new URL(request.url);
@@ -20,40 +35,40 @@ export default {
       const UPSTREAM_URL = env.K8S_API_URL || 'https://api.scarmonit.com';
       const ALLOWED_ORIGIN = env.ALLOWED_ORIGIN || '*';
 
-      // 2. CORS Preflight
-      if (request.method === 'OPTIONS') {
-        return new Response(null, {
-          status: 204,
-          headers: {
-            'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-            'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-CSRF-Token, Upgrade, Connection',
-            'Access-Control-Max-Age': '86400',
-          },
-        });
+      // 2. Robots.txt - Prevent indexing
+      if (url.pathname === '/robots.txt') {
+        return new Response('User-agent: *\nDisallow: /', { status: 200 });
       }
 
-      // 3. Routing - Proxy Health Check
+      // 3. CORS Preflight
+      if (request.method === 'OPTIONS') {
+        return handleCorsPreflight(ALLOWED_ORIGIN);
+      }
+
+      // 4. Routing - Proxy Health Check
       if (url.pathname === '/kubernetes/proxy-health') {
-        return new Response(JSON.stringify({ status: 'ok', version: '1.0.0', env: env.ENVIRONMENT || 'production' }), {
+        return new Response(JSON.stringify({
+          status: 'ok',
+          version: '1.0.1',
+          env: env.ENVIRONMENT || 'production',
+          requestId
+        }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      // 4. Routing - Kubernetes Check
+      // 5. Routing - Kubernetes Check
       if (!url.pathname.startsWith('/kubernetes')) {
         return new Response('Not Found', { status: 404 });
       }
 
-      // 5. Pass-through for Dashboard/Static Assets
-      // If the path matches exact /kubernetes, /kubernetes/, or /kubernetes/dashboard*, we assume it's the UI served by Pages
-      if (url.pathname === '/kubernetes' || url.pathname === '/kubernetes/' || url.pathname.startsWith('/kubernetes/dashboard')) {
+      // 6. Pass-through for Dashboard/Static Assets
+      if (isDashboardPath(url.pathname)) {
         return fetch(request);
       }
 
-      // 6. Proxy Logic
-      // Remove '/kubernetes' prefix (11 chars) to match upstream structure
+      // 7. Proxy Logic
       const strippedPath = url.pathname.slice(11); 
       const targetUrl = new URL(strippedPath, UPSTREAM_URL).toString() + url.search;
 
@@ -64,23 +79,23 @@ export default {
         clientIp: request.headers.get('CF-Connecting-IP')
       });
 
-      // 7. WebSocket Support
-      const upgradeHeader = request.headers.get('Upgrade');
-      if (upgradeHeader?.toLowerCase() === 'websocket') {
+      // 8. WebSocket Support
+      if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
         log('info', 'WebSocket upgrade detected');
         return await fetch(targetUrl, request);
       }
 
-      // 8. Headers & Auth Injection
+      // 9. Headers & Auth Injection
       const newHeaders = new Headers(request.headers);
       const upstreamHost = new URL(UPSTREAM_URL).host;
       newHeaders.set('Host', upstreamHost);
+      newHeaders.set('User-Agent', 'Kubernetes-API-Proxy/1.0.1');
 
       if (env.K8S_BEARER_TOKEN) {
         newHeaders.set('Authorization', `Bearer ${env.K8S_BEARER_TOKEN}`);
       }
 
-      // 9. Forward Request
+      // 10. Forward Request
       const apiRequest = new Request(targetUrl, {
         method: request.method,
         headers: newHeaders,
@@ -90,15 +105,9 @@ export default {
 
       const response = await fetch(apiRequest);
 
-      // 10. Harden Response Headers
-      const resHeaders = new Headers(response.headers);
-      resHeaders.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
-      resHeaders.set('X-Content-Type-Options', 'nosniff');
-      resHeaders.set('X-Frame-Options', 'DENY');
-      resHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-      resHeaders.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+      // 11. Harden Response Headers
+      const resHeaders = hardenHeaders(response.headers, ALLOWED_ORIGIN);
       
-      // Log success/failure from upstream
       log('info', 'Upstream response', { status: response.status, durationMs: Date.now() - startTime });
 
       return new Response(response.body, {
@@ -125,3 +134,47 @@ export default {
     }
   },
 };
+
+/**
+ * Handles CORS OPTIONS requests
+ * @param {string} allowedOrigin 
+ * @returns {Response}
+ */
+function handleCorsPreflight(allowedOrigin) {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': allowedOrigin,
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-CSRF-Token, Upgrade, Connection',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
+
+/**
+ * Checks if path is for dashboard or static assets
+ * @param {string} pathname 
+ * @returns {boolean}
+ */
+function isDashboardPath(pathname) {
+  return pathname === '/kubernetes' || 
+         pathname === '/kubernetes/' || 
+         pathname.startsWith('/kubernetes/dashboard');
+}
+
+/**
+ * Hardens response headers for security
+ * @param {Headers} headers 
+ * @param {string} allowedOrigin 
+ * @returns {Headers}
+ */
+function hardenHeaders(headers, allowedOrigin) {
+  const resHeaders = new Headers(headers);
+  resHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
+  resHeaders.set('X-Content-Type-Options', 'nosniff');
+  resHeaders.set('X-Frame-Options', 'DENY');
+  resHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  resHeaders.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  return resHeaders;
+}
